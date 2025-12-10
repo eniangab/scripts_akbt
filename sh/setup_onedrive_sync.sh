@@ -110,14 +110,13 @@ sync_to_onedrive() {
     # --progress for progress indication
     # --update to skip files that are newer on destination
     # --create-empty-src-dirs to create empty directories
-    # --delete-after to remove files from OneDrive that don't exist in source (full sync)
     # --log-level INFO for detailed logging
+    # Note: Files deleted from source will remain in OneDrive (safe sync)
     
     rclone sync "$SOURCE_FOLDER" "$ONEDRIVE_REMOTE" \
         --progress \
         --update \
         --create-empty-src-dirs \
-        --delete-after \
         --transfers 4 \
         --checkers 8 \
         --log-file="$LOG_FILE" \

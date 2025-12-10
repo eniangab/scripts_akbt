@@ -146,12 +146,11 @@ sync_folder_to_onedrive() {
     fi
     
     # Perform sync with rclone
-    # --delete-after removes files from OneDrive that don't exist in source (full sync)
+    # Note: Files deleted from source will remain on OneDrive (safe sync)
     rclone sync "$source_folder" "$onedrive_remote" \
         --progress \
         --update \
         --create-empty-src-dirs \
-        --delete-after \
         --transfers 4 \
         --checkers 8 \
         --log-file="$LOG_FILE" \
