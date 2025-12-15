@@ -251,7 +251,7 @@ configure_onedrive() {
     echo ""
     echo "Follow these steps to configure OneDrive:"
     echo "1. Enter remote name: onedrive-work"
-    echo "2. Choose storage type: Microsoft OneDrive (option 31 or search for 'onedrive')"
+    echo "2. Choose storage type: Microsoft OneDrive (search for 'onedrive')"
     echo "3. Leave client_id blank (press Enter)"
     echo "4. Leave client_secret blank (press Enter)"
     echo "5. Choose region: Microsoft Cloud Global (option 1)"
