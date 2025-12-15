@@ -460,7 +460,8 @@ setup_cron() {
             read -p "Enter cron schedule (e.g., '0 2 * * *' for daily at 2 AM): " CRON_SCHEDULE
             ;;
         *)
-            error_exit "Invalid option"
+            warning_msg "Invalid option. Please try again."
+            return
             ;;
     esac
     
