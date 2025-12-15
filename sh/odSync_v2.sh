@@ -149,47 +149,48 @@ sync_folder_to_onedrive() {
     # Note: Files are synced bidirectionally between local and OneDrive
     log "2-way syncing: $source_folder <-> $onedrive_remote"
     
-    # Check if bisync state exists - if not, need to initialize with --resync
-    BISYNC_STATE_DIR="$HOME/.cache/rclone/bisync"
-    BISYNC_STATE_FILE="$BISYNC_STATE_DIR/$(echo "$onedrive_remote" | sed 's/[^a-zA-Z0-9]/_/g').lst"
+    # Try regular bisync first - rclone will tell us if it needs --resync
+    rclone bisync "$source_folder" "$onedrive_remote" \
+        --create-empty-src-dirs \
+        --transfers 4 \
+        --checkers 8 \
+        --log-file="$LOG_FILE" \
+        --log-level INFO \
+        --resilient \
+        --recover \
+        --conflict-resolve newer \
+        --conflict-loser num
     
-    if [ ! -f "$BISYNC_STATE_FILE" ]; then
-        warning_msg "First time sync - initializing bisync for $onedrive_path"
-        rclone bisync "$source_folder" "$onedrive_remote" \
-            --create-empty-src-dirs \
-            --transfers 4 \
-            --checkers 8 \
-            --log-file="$LOG_FILE" \
-            --log-level INFO \
-            --resync
-        
-        if [ $? -eq 0 ]; then
-            success_msg "Bisync initialized: $onedrive_path"
-            return 0
-        else
-            error_exit "Bisync initialization failed for $onedrive_path. Check log file: $LOG_FILE"
-            return 1
-        fi
-    else
-        # Regular 2-way sync
-        rclone bisync "$source_folder" "$onedrive_remote" \
-            --create-empty-src-dirs \
-            --transfers 4 \
-            --checkers 8 \
-            --log-file="$LOG_FILE" \
-            --log-level INFO \
-            --resilient \
-            --recover \
-            --conflict-resolve newer \
-            --conflict-loser num
-        
-        if [ $? -eq 0 ]; then
-            success_msg "2-way sync completed: $onedrive_path"
-            return 0
+    local sync_result=$?
+    
+    # Check if bisync needs initialization (exit code 2 or specific error patterns)
+    if [ $sync_result -ne 0 ]; then
+        # Check if the error is due to missing bisync state (needs --resync)
+        if grep -q "cannot find prior" "$LOG_FILE" 2>/dev/null || \
+           grep -q "must run --resync" "$LOG_FILE" 2>/dev/null; then
+            warning_msg "First time sync - initializing bisync for $onedrive_path"
+            rclone bisync "$source_folder" "$onedrive_remote" \
+                --create-empty-src-dirs \
+                --transfers 4 \
+                --checkers 8 \
+                --log-file="$LOG_FILE" \
+                --log-level INFO \
+                --resync
+            
+            if [ $? -eq 0 ]; then
+                success_msg "Bisync initialized: $onedrive_path"
+                return 0
+            else
+                error_exit "Bisync initialization failed for $onedrive_path. Check log file: $LOG_FILE"
+                return 1
+            fi
         else
             error_exit "2-way sync failed for $onedrive_path. Check log file: $LOG_FILE"
             return 1
         fi
+    else
+        success_msg "2-way sync completed: $onedrive_path"
+        return 0
     fi
 }
 
