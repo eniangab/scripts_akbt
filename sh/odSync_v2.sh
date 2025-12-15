@@ -182,11 +182,9 @@ sync_folder_to_onedrive() {
                 return 0
             else
                 error_exit "Bisync initialization failed for $onedrive_path. Check log file: $LOG_FILE"
-                return 1
             fi
         else
             error_exit "2-way sync failed for $onedrive_path. Check log file: $LOG_FILE"
-            return 1
         fi
     else
         success_msg "2-way sync completed: $onedrive_path"
