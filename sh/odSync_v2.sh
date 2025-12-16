@@ -154,6 +154,18 @@ sync_folder_to_onedrive() {
     BISYNC_STATE_DIR="$HOME/.cache/rclone/bisync"
     BISYNC_STATE_FILE="$BISYNC_STATE_DIR/$(echo "$onedrive_remote" | sed 's/[^a-zA-Z0-9]/_/g').lst"
     
+    # Clean up all stale lock files for this sync pair
+    # The lock file pattern is complex, so we'll find and remove all matching .lck files
+    find "$BISYNC_STATE_DIR" -name "*.lck" -type f 2>/dev/null | while read -r lock_file; do
+        # Check if lock file is for this sync by checking if it contains references to our paths
+        if echo "$lock_file" | grep -q "DOCUMENTS" || \
+           echo "$lock_file" | grep -q "$(basename "$source_folder")" || \
+           echo "$lock_file" | grep -q "$onedrive_path"; then
+            warning_msg "Removing stale bisync lock file: $(basename "$lock_file")"
+            rm -f "$lock_file" 2>/dev/null || true
+        fi
+    done
+    
     if [ ! -f "$BISYNC_STATE_FILE" ] || [ "$force_resync" = "true" ]; then
         if [ "$force_resync" = "true" ]; then
             warning_msg "Force resync requested for $onedrive_path"
@@ -166,6 +178,12 @@ sync_folder_to_onedrive() {
             --checkers 8 \
             --log-file="$LOG_FILE" \
             --log-level INFO \
+            --exclude "~$*" \
+            --exclude "*.tmp" \
+            --exclude "*.temp" \
+            --exclude ".DS_Store" \
+            --exclude "Thumbs.db" \
+            --exclude "desktop.ini" \
             --resync
         
         if [ $? -eq 0 ]; then
@@ -186,7 +204,13 @@ sync_folder_to_onedrive() {
             --resilient \
             --recover \
             --conflict-resolve newer \
-            --conflict-loser num
+            --conflict-loser num \
+            --exclude "~$*" \
+            --exclude "*.tmp" \
+            --exclude "*.temp" \
+            --exclude ".DS_Store" \
+            --exclude "Thumbs.db" \
+            --exclude "desktop.ini"
         
         local exit_code=$?
         
