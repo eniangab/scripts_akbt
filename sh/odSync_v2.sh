@@ -135,6 +135,7 @@ mount_network_share() {
 sync_folder_to_onedrive() {
     local source_folder="$1"
     local onedrive_path="$2"
+    local force_resync="${3:-false}"
     local onedrive_remote="${ONEDRIVE_REMOTE_BASE}:${onedrive_path}"
     
     log "Starting sync: $source_folder -> $onedrive_remote"
@@ -153,8 +154,12 @@ sync_folder_to_onedrive() {
     BISYNC_STATE_DIR="$HOME/.cache/rclone/bisync"
     BISYNC_STATE_FILE="$BISYNC_STATE_DIR/$(echo "$onedrive_remote" | sed 's/[^a-zA-Z0-9]/_/g').lst"
     
-    if [ ! -f "$BISYNC_STATE_FILE" ]; then
-        warning_msg "First time sync - initializing bisync for $onedrive_path"
+    if [ ! -f "$BISYNC_STATE_FILE" ] || [ "$force_resync" = "true" ]; then
+        if [ "$force_resync" = "true" ]; then
+            warning_msg "Force resync requested for $onedrive_path"
+        else
+            warning_msg "First time sync - initializing bisync for $onedrive_path"
+        fi
         rclone bisync "$source_folder" "$onedrive_remote" \
             --create-empty-src-dirs \
             --transfers 4 \
@@ -167,7 +172,8 @@ sync_folder_to_onedrive() {
             success_msg "Bisync initialized: $onedrive_path"
             return 0
         else
-            error_exit "Bisync initialization failed for $onedrive_path. Check log file: $LOG_FILE"
+            warning_msg "Bisync initialization failed for $onedrive_path. Check log file: $LOG_FILE"
+            return 1
         fi
     else
         # Regular 2-way sync
@@ -182,11 +188,18 @@ sync_folder_to_onedrive() {
             --conflict-resolve newer \
             --conflict-loser num
         
-        if [ $? -eq 0 ]; then
+        local exit_code=$?
+        
+        if [ $exit_code -eq 0 ]; then
             success_msg "2-way sync completed: $onedrive_path"
             return 0
         else
-            error_exit "2-way sync failed for $onedrive_path. Check log file: $LOG_FILE"
+            warning_msg "2-way sync failed for $onedrive_path (exit code: $exit_code)"
+            if grep -q "HTTP error 423" "$LOG_FILE" 2>/dev/null; then
+                warning_msg "Resource is locked. Run with --force-resync to reinitialize."
+            elif grep -q "bisync aborted" "$LOG_FILE" 2>/dev/null; then
+                warning_msg "Bisync aborted. Run with --force-resync to recover."
+            fi
             return 1
         fi
     fi
@@ -194,6 +207,7 @@ sync_folder_to_onedrive() {
 
 # Sync all configured folders
 sync_all_folders() {
+    local force_resync="${1:-false}"
     load_sync_folders
     
     local total=${#SYNC_FOLDERS[@]}
@@ -201,7 +215,11 @@ sync_all_folders() {
     local success_count=0
     local fail_count=0
     
-    log "=== Starting sync of $total folder(s) ==="
+    if [ "$force_resync" = "true" ]; then
+        log "=== Starting FORCE RESYNC of $total folder(s) ==="
+    else
+        log "=== Starting sync of $total folder(s) ==="
+    fi
     
     for folder_config in "${SYNC_FOLDERS[@]}"; do
         ((current++))
@@ -220,7 +238,7 @@ sync_all_folders() {
         fi
         
         # Sync the folder
-        if sync_folder_to_onedrive "$source_path" "$onedrive_path"; then
+        if sync_folder_to_onedrive "$source_path" "$onedrive_path" "$force_resync"; then
             ((success_count++))
         else
             ((fail_count++))
@@ -499,7 +517,12 @@ main() {
         check_lock
         check_rclone
         check_onedrive_config
-        sync_all_folders
+        sync_all_folders false
+    elif [[ "$1" == "--force-resync" ]]; then
+        check_lock
+        check_rclone
+        check_onedrive_config
+        sync_all_folders true
     else
         # Interactive mode
         while true; do
